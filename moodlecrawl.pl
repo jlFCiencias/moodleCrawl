@@ -40,7 +40,7 @@ my $tipoSalida = "html";
 
 encabezadoHTML($archivoSalida);
 
-#print "Codigo de respuesta: ".$res->code."\n\n";
+#print "Codigo de respuesta de la URL: ".$res->code."\n\n";
 
 ($tipoSalida eq 'html')? agregaArchivo($archivoSalida, "<p>Codigo de respuesta: ".$res->code."</p>\n") : agregaArchivo($archivoSalida, "Codigo de respuesta: ".$res->code."\n\n");
 
@@ -52,19 +52,22 @@ else {
     ($tipoSalida eq 'html')? agregaArchivo($archivoSalida, "<p>Failed: ".$res->status_line."</p>\n") : agregaArchivo($archivoSalida, "Failed: ", $res->status_line, "\n");
 }
 
-pieHTML($archivoSalida);
-
-exit (0);
-
 # Revisamos la respuesta a los errores 403, 404 y 500
 analizaCodigosError($url, $archivoSalida, $tipoSalida);
+
+pieHTML($archivoSalida);
 
 my $dic = "dicMoodle2";
 
 # Hacemos la revisión de los directorios contenidos en el diccionario
-revisaDiccionario($url, $dic);
+revisaDiccionario($url, $dic, $archivoSalida, $tipoSalida);
 
+exit (0);
 
+#
+# Intenta generar los errores 403, 404 y 500 en el equipo analizado y muestra los resultados obtenidos
+# Tambien despliega una recomendacion de seguridad, en caso de ser necesario.
+#
 sub analizaCodigosError{
     my ($url, $fileOut, $tipoSalida) = @_; # Recibimos la URL, el nombre del archivo de salida y el tipo de salida a generar
 
@@ -72,62 +75,67 @@ sub analizaCodigosError{
     open(SALIDA, ">>", $fileOut)
 	or die "No se puede abrir el archivo para agregar la salida.";
 
-    my ($ua, $res403, $res404, $res500, $req);
+    my ($ua, $res403, $res404, $res500, $req, $urlErr);
+
+    ($tipoSalida eq 'html')? print SALIDA "<p><h2>Analisis de errores</h2></p>\n" : print SALIDA "Analisis de errores\n\n";
 
     # Error 403
-    print "Analisis de error 403:\n";
+    ($tipoSalida eq 'html')? print SALIDA "<p>Analisis de error 403:</p>\n<table border=1>\n" : print SALIDA "Analisis de error 403:\n";
     $ua = LWP::UserAgent->new();
     $ua->agent('Mozilla/5.0');
-    $req = HTTP::Request->new(GET => $url.'archivoParaError403.php');
+    $urlErr = $url.'archivoParaError403.php';
+    $req = HTTP::Request->new(GET => $urlErr);
     $res403 = $ua->request($req);
-    print "\tURL para generar error 403: ".$url."archivoParaError403.php\n";
-    print "\tCodigo de respuesta: ".$res403->code."\n";
+    ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>URL utilizada</td><td class='celdaTexto'>".$urlErr."</td></tr>\n" : print SALIDA "\tURL utilizada: ".$urlErr."\n";
+    ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Codigo de respuesta</td><td class='celdaTexto'>".$res403->code."</td></tr>\n" : print SALIDA "\tCodigo de respuesta: ".$res403->code."\n";
     if (grep(/Apache\/.*[0-9]+\.[0-9]+/, $res403->content))
     {
-	print "\tDiagnostico: el servidor revela informacion que deberia mantenerse como privada.\n";
-	print "\tRecomendacion: incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.\n";
-	print "\tTambien se dede definir la respuesta para el error 404 en el servidor Web\n\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Diagnostico</td><td class='celdaTexto'>El servidor revela informacion que deberia mantenerse como privada</td></tr>\n" : print SALIDA "\tDiagnostico: el servidor revela informacion que deberia mantenerse como privada.\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Recomendacion</td><td class='celdaTexto'>Incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.<br />Tambien se dede definir la respuesta para el error 403 en el servidor Web.</td></tr></table>\n" : print SALIDA "\tRecomendacion: incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.\n\tTambien se dede definir la respuesta para el error 403 en el servidor Web\n\n";
     }
     else
     {
-	print "\tDiagnostico: el servidor no revela informacion privada.\n\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Diagnostico</td><td class='celdaTexto'>El servidor no revela informacion privada</td></tr></table>\n" : print SALIDA "\tDiagnostico: el servidor no revela informacion privada.\n\n";
     }
 
     # Error 404
-    print "Analisis de error 404:\n";
+    ($tipoSalida eq 'html')? print SALIDA "<p>Analisis de error 404:</p>\n<table border=1>\n" : print SALIDA "Analisis de error 404:\n";
     $ua = LWP::UserAgent->new();
     $ua->agent('Mozilla/5.0');
-    $req = HTTP::Request->new(GET => $url.'archivoParaError404.php');
+    $urlErr = $url.'archivoParaError404.php';
+    $req = HTTP::Request->new(GET => $urlErr);
     $res404 = $ua->request($req);
-    print "\tURL para generar error 404: ".$url."archivoParaError404.php\n";
-    print "\tCodigo de respuesta: ".$res404->code."\n";
+    ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>URL utilizada</td><td class='celdaTexto'>".$urlErr."</td></tr>\n" : print SALIDA "\tURL utilizada: ".$urlErr."\n";
+    ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Codigo de respuesta</td><td class='celdaTexto'>".$res404->code."</td></tr>\n" : print SALIDA "\tCodigo de respuesta: ".$res404->code."\n";
     if (grep(/Apache\/.*[0-9]+\.[0-9]+/, $res404->content))
     {
-	print "\tDiagnostico: el servidor revela informacion que deberia mantenerse como privada.\n";
-	print "\tRecomendacion: incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.\n";
-	print "\tTambien se dede definir la respuesta para el error 404 en el servidor Web\n\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Diagnostico</td><td class='celdaTexto'>El servidor revela informacion que deberia mantenerse como privada</td></tr>\n" : print SALIDA "\tDiagnostico: el servidor revela informacion que deberia mantenerse como privada.\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Recomendacion</td><td class='celdaTexto'>incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada<br />Tambien se dede definir la respuesta para el error 404 en el servidor Web.</td></tr></table>\n" : print SALIDA "\tRecomendacion: incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.\n\tTambien se dede definir la respuesta para el error 404 en el servidor Web\n\n";
     }
     else
     {
-	print "\tDiagnostico: el servidor no revela informacion privada.\n\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Diagnostico</td><td class='celdaTexto'>El servidor no revela informacion privada</td></tr></table>\n" : print SALIDA "\tDiagnostico: el servidor no revela informacion privada.\n\n";
     }
 
     # Error 500
-    print "Analisis de error 500:\n";
-    $req = HTTP::Request->new(GET => $url.'version.php');
+    ($tipoSalida eq 'html')? print SALIDA "<p>Analisis de error 500:</p>\n<table border=1>\n" : print SALIDA "Analisis de error 500:\n";
+    $ua = LWP::UserAgent->new();
+    $ua->agent('Mozilla/5.0');
+    $urlErr = $url.'version.php';
+    $req = HTTP::Request->new(GET => $urlErr);
     $res500 = $ua->request($req);
-    print "\tURL y metodo para generar error 500: GET ".$url."version.php\n";
-    print "\tCodigo de respuesta: ".$res500->code."\n";
+    ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Metodo y URL</td><td class='celdaTexto'>GET ".$urlErr."</td></tr>\n" : print SALIDA "\tMetodo y URL: GET ".$urlErr."\n\n";
+    ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Codigo de respuesta</td><td class='celdaTexto'>".$res500->code."</td></tr>\n" : print SALIDA "\tCodigo de respuesta: ".$res500->code."\n";
     if (grep(/Apache\/.*[0-9]+\.[0-9]+/, $res500->content))
     {
-	print "\tDiagnostico: el servidor revela informacion que deberia mantenerse como privada.\n";
-	print "\tRecomendacion: incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.\n";
-	print "\tTambien se dede definir la respuesta para el error 500 en el servidor Web\n\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Diagnostico</td><td class='celdaTexto'>El servidor revela informacion que deberia mantenerse como privada</td></tr>\n" : print SALIDA "\tDiagnostico: el servidor revela informacion que deberia mantenerse como privada.\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Recomendacion</td><td class='celdaTexto'>incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada<br />Tambien se dede definir la respuesta para el error 500 en el servidor Web.</td></tr></table>\n" : print SALIDA "\tRecomendacion: incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.\n\tTambien se dede definir la respuesta para el error 500 en el servidor Web\n\n";
     }
     else
     {
-	print "\tDiagnostico: el servidor no revela informacion privada.\n\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Diagnostico</td><td class='celdaTexto'>El servidor no revela informacion privada</td></tr></table>\n" : print SALIDA "\tDiagnostico: el servidor no revela informacion privada.\n\n";
     }
+    close (SALIDA);
 }
 
 
@@ -137,10 +145,10 @@ sub analizaCodigosError{
 # en caso de que el usuario lo indique.
 #
 sub revisaDiccionario{ 
-    my ($url, $dicFile) = @_; # Recibimos la url a analizar y el nombre del diccionario
-    my ($ua, $res, $req, $urlDir);
+    # Recibimos la url a analizar, el nombre del diccionario, el nombre del archivo de salida y el tipo de salida
+    my ($url, $dicFile, $fileOut, $tipoSalida) = @_; 
+    my ($ua, $res, $req, $urlDir, $finURL);
 
-    print "Analisis de diccionario:\n";
     $ua = LWP::UserAgent->new();
     $ua->agent('Mozilla/5.0');
 
@@ -148,38 +156,53 @@ sub revisaDiccionario{
     open (DIRECTORIOS, $dicFile)
 	or die "No se puede abrir el archivo de contrasenias\n";
 
+    # Intentamos abrir el archivo de salida para agregar informacion  
+    open(SALIDA, ">>", $fileOut)
+        or die "No se puede abrir el archivo para agregar la salida.";
+
+    if (substr($url, -1) eq '/'){
+	chop($url);
+    }
+    ($tipoSalida eq 'html')? print SALIDA "<p><h2>Analisis de diccionario</h2></p>\n<table class='sinBorde'>\n" : print SALIDA "Analisis de diccionario:\n\n";
     # Intentamos cada uno de los directorios en el servidor y revisamos los codigos 
     # devueltos para la peticion HTTP
     while (<DIRECTORIOS>) {
 	chomp($_);
-	$urlDir = $url.$_;
+	if ($_ =~ /\/.*/){
+	    $urlDir = $url.$_;
+	}
+	else 
+	{
+	    $urlDir = $url.'/'.$_;
+	}
 	$req = HTTP::Request->new(GET => $urlDir);
 	$res = $ua->request($req);
-	print "$urlDir\n";
-	print "\tDiagnostico: ";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td>".$urlDir."</td>\n" : print SALIDA "$urlDir\n";
+	($tipoSalida eq 'html')? print SALIDA "<td></td>\n" : print SALIDA "\tDiagnostico: ";
 	if ($res->code == 200){
-	    print "El directorio existe y es accesible.\n\n";
+	    ($tipoSalida eq 'html')? print SALIDA "<td>El directorio existe y es accesible</td></tr>\n" : print SALIDA "Existe y es accesible.\n\n";
 	}
 	else{
 	    if ($res->code == 403){
-		print "El directorio existe pero se requieren privilegios para acceder.\n\n";
+		($tipoSalida eq 'html')? print SALIDA "<td>Existe pero se requieren privilegios para acceder</td></tr>\n" : print SALIDA "Existe pero se requieren privilegios para acceder.\n\n";
 	    }
 	    else{
 		if ($res->code == 404){
-		    print "El directorio no existe.\n\n";
+		    ($tipoSalida eq 'html')? print SALIDA "<td>No existe</td></tr>\n" : print SALIDA "No existe.\n\n";
 		}
 		else{
 		    if ($res->code >= 300 && $res->code < 400){
-			print "La peticion fue redirigida.\n\n";
+			($tipoSalida eq 'html')? print SALIDA "<td>La peticion fue redirigida</td></tr>\n" : print SALIDA "La peticion fue redirigida.\n\n";
 		    }
 		    else{
-			print "El servidor reporto el error ".$res->code."\n\n";
+			($tipoSalida eq 'html')? print SALIDA "<td>El servidor reporto el error ".$res->code."</td></tr>\n" : print SALIDA "El servidor reporto el error ".$res->code."\n\n";
 		    }
 		}
 	    }
 	}
     }
     close (DIRECTORIOS);
+    close (SALIDA);
 }
 
 
@@ -194,7 +217,7 @@ sub analizaEncabezado{
     open(SALIDA, ">>", $fileOut)
 	or die "No se puede abrir el archivo para agregar la salida.";
 
-    ($tipoSalida eq 'html')? print SALIDA "<p>Analisis de encabezados:</p>\n" : print SALIDA "Analisis de encabezados:\n\n";
+    ($tipoSalida eq 'html')? print SALIDA "<p><h2>Analisis de encabezados</h2></p>\n" : print SALIDA "Analisis de encabezados:\n\n";
 
     # Revisamos la cabecera Server
     ($tipoSalida eq 'html')? print SALIDA "<p>Cabecera Server: </p>\n<table border=1>\n" : print SALIDA "Cabecera Server:\n";
@@ -330,7 +353,7 @@ sub pieHTML{
 	or die "No se puede abrir el archivo para la salida HTML.";
 
     # Agregamos las etiquetas y cerramos el archivo
-    print SALIDA "</body>\n";
+    print SALIDA "<br /><br /></body>\n";
     print SALIDA "</html>\n";
     close (SALIDA);
 }
@@ -354,14 +377,3 @@ sub muestraAyuda {
     print "Las opciones --ip y -s son excluyentes con la URL. En caso de incluirse una de las opciones y la URL, esta ultima se ignorara y se hara uso de la expresion incluida en las opciones mencionadas.\n";
     print "Todos los parametros son opcionales.\n";
 }
-
-
-
-#http://search.cpan.org/~ether/HTTP-Message-6.11/lib/HTTP/Response.pm
-#http://search.cpan.org/~oalders/libwww-perl-6.23/lib/LWP/UserAgent.pm
-#http://stackoverflow.com/questions/4022463/how-can-i-extract-non-standard-http-headers-using-perls-lwp
-#http://search.cpan.org/~ether/HTTP-Message-6.11/lib/HTTP/Headers.pm
-#http://search.cpan.org/~ether/HTTP-Message-6.11/lib/HTTP/Message.pm
-###
-#http://lwp.interglacial.com/ch03_05.htm
-
