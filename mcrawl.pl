@@ -52,13 +52,17 @@ if ($params{login} eq 'guest') {
 
 push @url_to_visit, $params{url};
 
-print $params{'clheaders'}->{'Cookie'}, "\n";
+
+#
+# Comenzamos el proceso de crawler
+#
 while (@url_to_visit) {
-    $url = shift @url_to_visit;
-    push @visited_url, $url;
-    print "Visiting ", $url, "...\n" if ($options{debug});
+    $url = shift @url_to_visit;   # Tomamos la primer url de la lsita de urls por revisar
+    push @visited_url, $url;      # y se guarda en la lista de urls ya revisadas
+    
+    #print "Visiting ", $url, "...\n" if ($options{debug});
+    print "Visiting ", $url, "...\n";
     visitUrl ($ua, $url, \%params, \%sslopts,  \%dir_found, \@url_to_visit, \@visited_url);
-#    print @url_to_visit, "\n";
 }
 my $n = keys %dir_found;
 #print "Numero de entradas: ", $n, "\n";
@@ -79,9 +83,14 @@ sub visitUrl {
     }
     $res = $myua->request($req);
 
-
     if ($res->code >= 200 and $res->code < 300) { # Recordar la(s) cookies recibida(s)
-	$p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'} if ($res->headers->{'set-cookie'});
+#	if ($res->headers->{'set-cookie'}) {
+#	    $p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'};
+#	    #print "Coockie: ", $res->headers->{'set-cookie'}, "\n";
+#	} else {
+#	    print "No hubo cookie\n";
+	#	}
+	1;
     } else {
 	print 'DEBUG >> ', "El servidor respondio con el codigo ", $res->code, "\n" if ($options{debug});
 	return;
@@ -345,13 +354,21 @@ sub getGuestConnected {
 	}
 	$content = join '&', $content, 'submit=';
     }
+    $form->delete;
     $tree->delete;
     
-    $req = HTTP::Request->new('POST' => $login);
+    #
+    # Preparamos una nueva solicitud con los resultados obtenidos
+    #
+    $req->clear();
+    $req->method('POST');
+    $req->uri($login);
     for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
 	$req->header($hn => $p->{'clheaders'}->{$hn});
     }
+    $req->header('Host' => $p->{host});
     $req->header('Referer' => $login);
+    $req->header('Upgrade-Insecure-Requests' => 1);
     $req->header('Content-Type' => 'application/x-www-form-urlencoded');
     $req->content($content);
     $res = $myua->request($req);
@@ -359,7 +376,7 @@ sub getGuestConnected {
     if ($res->code >= 400) {
 	return -1;
     }
-    print $res->content, "\n";
+
     if ($res->code >= 200 and $res->code < 300) {
 	if ($res->content =~ /notloggedin/) {
 	    return -1;
@@ -367,25 +384,50 @@ sub getGuestConnected {
     } elsif ($res->code >= 300 and $res->code <= 303) {
 	if ($res->headers->{'set-cookie'}) {
 	    if (ref ($res->headers->{'set-cookie'}) eq "ARRAY") {
-		for my $e (@{$res->headers->{'set-cookie'}}) {
-		    if ($e =~ /MoodleSession/) {
-			$p->{'clheaders'}->{'Cookie'} = $e;
-		    }
-		}
+		$p->{'clheaders'}->{'Cookie'} = join '; ', @{$res->headers->{'set-cookie'}};
 	    } else {
 		$p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'};
 	    }
 	}
-
-	$req = HTTP::Request->new('GET' => $res->headers->{'location'});
-	for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
-	    $req->header($hn => $p->{'clheaders'}->{$hn});
-	}
-	$req->headers('Referer' => $login);
-	$res = $myua->request($req);
-	print $res->code, "\n";
-#	print $res->content;
+    } else {
+	return -1;
     }
+    #
+    # Prepara una nueva peticion para obtener una llave de sesion
+    #
+    $req->clear();
+    $req->method('GET');
+    $req->uri($p->{url}.'/user/policy.php');
+    for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
+	$req->header($hn => $p->{'clheaders'}->{$hn});
+    }
+    $res = $myua->request($req);
+
+    if ($res->code >= 400) {
+	return -1;
+    }
+
+    if ($res->headers->{'set-cookie'}) {
+	if (ref ($res->headers->{'set-cookie'}) eq "ARRAY") {
+	    $p->{'clheaders'}->{'Cookie'} = join '; ', @{$res->headers->{'set-cookie'}};
+	} else {
+	    $p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'};
+	}
+    }
+    $tree = HTML::TreeBuilder->new_from_content($res->content);
+    $form = $tree->look_down('_tag', 'form')
+	
+    #
+    # Prepara una nueva peticion para obtener una llave de sesion
+    #
+    $req->clear();
+    $req->method('POST');
+    $req->uri($p->{url}.'/user/policy.php');
+    for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
+	$req->header($hn => $p->{'clheaders'}->{$hn});
+    }
+    $res = $myua->request($req);
+    print $res->content;
 
     return 1;
 }
@@ -446,7 +488,13 @@ sub getConnected {
 	}
     }
 
-    $p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'} if ($res->headers->{'set-cookie'});
+    if ($res->headers->{'set-cookie'}) {
+	if (ref ($res->headers->{'set-cookie'}) eq "ARRAY") {
+	    $p->{'clheaders'}->{'Cookie'} = join '; ', @{$res->headers->{'set-cookie'}};
+	} else {
+	    $p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'};
+	}
+    }
     return 1;
 }
 
