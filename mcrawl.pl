@@ -17,7 +17,7 @@ use HTML::TreeBuilder;
 my %params = (loop => 0);
 my (%options, %dir_found, %sslopts);
 my (@url_to_visit, @visited_url);
-
+my ($ua, $url);
 #my %sslopts=(SSL_verify_mode => SSL_VERIFY_NONE,
 #	     verify_hostname => 0,
 #	     SSL_ca_path => IO::Socket::SSL::default_ca(),);
@@ -37,16 +37,27 @@ if (adjustParams(\%params, \%sslopts) == -1 ) {
     exit (-1);
 }
 
-getConnected(\%params);
+$ua = LWP::UserAgent->new ( ssl_opts => \%sslopts );
+$ua->agent('Mozilla/5.0');
+
+
+if ($params{login} eq 'guest') {
+    if (getGuestConnected($ua, \%params) == -1) {
+	exit (-1);
+    }
+}
+#} else {
+#    getConnected(\%params);
+#}
 
 push @url_to_visit, $params{url};
 
-my $url;
+print $params{'clheaders'}->{'Cookie'}, "\n";
 while (@url_to_visit) {
     $url = shift @url_to_visit;
     push @visited_url, $url;
     print "Visiting ", $url, "...\n" if ($options{debug});
-    visitUrl ($url, \%params, \%sslopts,  \%dir_found, \@url_to_visit, \@visited_url);
+    visitUrl ($ua, $url, \%params, \%sslopts,  \%dir_found, \@url_to_visit, \@visited_url);
 #    print @url_to_visit, "\n";
 }
 my $n = keys %dir_found;
@@ -54,32 +65,22 @@ my $n = keys %dir_found;
 for my $k (sort keys %dir_found) {
     print $k , "\n";
 }
-#my $n = @visited_url;
-#print "Numero de entradas: ", $n, "\n";
-#for my $k (@visited_url) {
-#    print $k , "\n";
-#}
-#
-#my $n = @url_to_visit;
-#print "Numero de entradas: ", $n, "\n";
-#for (@url_to_visit) {
-#    print $_ , "\n";
-#}
 
+##
+## visitUrl
+##
 sub visitUrl {
-    my ($url, $p, $sslopts, $dirs, $tovisit, $visited) = @_;
-    my ($ua, $req, $res, $tree, $k, @links);
+    my ($myua, $url, $p, $sslopts, $dirs, $tovisit, $visited) = @_;
+    my ($req, $res, $tree, $k, @links);
 
-    $ua = LWP::UserAgent->new ( ssl_opts => $sslopts );
     $req = HTTP::Request->new ('GET' => $url);
-
-    # Agregamos las cabeceras necesarias a la peticion
-    for my $hn (keys %{$p->{'clheaders'}}) {
+    for my $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
 	$req->header($hn => $p->{'clheaders'}->{$hn});
     }
-    $res = $ua->request($req);
+    $res = $myua->request($req);
 
-    if ($res->code >= 200 and $res->code < 300) { # Recordar la(s) cookies enviada(s)
+
+    if ($res->code >= 200 and $res->code < 300) { # Recordar la(s) cookies recibida(s)
 	$p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'} if ($res->headers->{'set-cookie'});
     } else {
 	print 'DEBUG >> ', "El servidor respondio con el codigo ", $res->code, "\n" if ($options{debug});
@@ -96,10 +97,6 @@ sub visitUrl {
 	    if (!$dirs->{$1}) {
 		$dirs->{$1} = 1;
 	    }
-#	    if ( (! checkURLIn ($visited, $href)) and
-#		(! checkURLIn($tovisit, $href))) {
-#		push @$tovisit, $href;
-#	    }
 	    if ( ! checkURLIn ($visited, $href)) {
 		push @$tovisit, $href;
 	    }
@@ -111,7 +108,7 @@ sub visitUrl {
     $#links = -1;
     @links = $tree->look_down ('_tag', 'img', 'src', qr/.+/);
     push @links, $tree->look_down ('_tag', 'script', 'src', qr/.+/);
-    for $k ($tree->look_down ('_tag', 'img', 'src', qr/.+/)) { # Busca y revisa los directorios dentro del atributo 'src' de las imagenes
+    for $k (@links) { # Busca y revisa los directorios dentro del atributo 'src' de las imagenes
 	my $src = $k->attr('src');
 	if ($src =~ m|^$p->{url}([\w\d\._/-]+)/([\w\d_.-]+)\.php.*$|) {
 	    if (!$dirs->{$1}) {
@@ -197,12 +194,6 @@ sub adjustParams {
     }
 }
 
-##
-## getConnected
-##
-sub getConnected {
-    my ($p) = @_;
-}
 
 ##
 ## Manejo de las opciones en linea de comandos.
@@ -315,5 +306,147 @@ sub processOptions {
 ## muestraAyuda muestra al usuario como se debe usar este programa.
 ##
 sub muestraAyuda {
+}
+
+##
+## getGuestConnected
+##
+sub getGuestConnected {
+    my ($myua, $p) = @_;
+    my ($req, $res, $login, $hn);
+    my ($tree, $form, $content, $submit, @inputs);
+
+    $login = join '', $p->{url}, 'login/index.php';
+
+    $req = HTTP::Request->new('GET' => $login);
+    $res = $myua->request($req);
+
+    if ($res->code >= 400) {
+	return -1;
+    }
+    $p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'} if ($res->headers->{'set-cookie'});
+
+    $content = join '&', 'username=guest', 'password=guest';
+    $tree = HTML::TreeBuilder->new_from_content ($res->content);
+    $form = $tree->look_down ('_tag', 'form', 'id', 'guestlogin');
+    if ($form) {
+	my $tmp = $form->look_down('_tag', 'input', 'name', 'username');
+	$tmp->detach;
+	$tmp->delete;
+	$tmp = $form->look_down('_tag', 'input', 'name', 'password');
+	$tmp->detach;
+	$tmp->delete;
+	@inputs = $form->look_down('_tag', 'input', 'type', 'text');
+	push @inputs, $form->look_down('_tag', 'input', 'type', 'checkbox');
+	$submit = $form->look_down('_tag', 'input', 'type', 'submit');
+
+	for my $i (@inputs) {
+	    $content = join '&', $content, $i->attr('name').'='.$i->attr('value');
+	}
+	$content = join '&', $content, 'submit=';
+    }
+    $tree->delete;
+    
+    $req = HTTP::Request->new('POST' => $login);
+    for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
+	$req->header($hn => $p->{'clheaders'}->{$hn});
+    }
+    $req->header('Referer' => $login);
+    $req->header('Content-Type' => 'application/x-www-form-urlencoded');
+    $req->content($content);
+    $res = $myua->request($req);
+
+    if ($res->code >= 400) {
+	return -1;
+    }
+    print $res->content, "\n";
+    if ($res->code >= 200 and $res->code < 300) {
+	if ($res->content =~ /notloggedin/) {
+	    return -1;
+	}
+    } elsif ($res->code >= 300 and $res->code <= 303) {
+	if ($res->headers->{'set-cookie'}) {
+	    if (ref ($res->headers->{'set-cookie'}) eq "ARRAY") {
+		for my $e (@{$res->headers->{'set-cookie'}}) {
+		    if ($e =~ /MoodleSession/) {
+			$p->{'clheaders'}->{'Cookie'} = $e;
+		    }
+		}
+	    } else {
+		$p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'};
+	    }
+	}
+
+	$req = HTTP::Request->new('GET' => $res->headers->{'location'});
+	for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
+	    $req->header($hn => $p->{'clheaders'}->{$hn});
+	}
+	$req->headers('Referer' => $login);
+	$res = $myua->request($req);
+	print $res->code, "\n";
+#	print $res->content;
+    }
+
+    return 1;
+}
+
+##
+## getConnected
+##
+sub getConnected {
+    my ($myua, $p) = @_;
+    my ($req, $res, $login, $hn);
+    my ($tree, $form, $content, $submit, @inputs);
+
+    $login = join '', $p->{url}, 'login/index.php';
+
+    $req = HTTP::Request->new('GET' => $login);
+    $res = $myua->request($req);
+
+    if ($res->code >= 400) {
+	return -1;
+    }
+    $p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'} if ($res->headers->{'set-cookie'});
+
+    $content = join '&', 'username='.$p->{login}, 'password='.$p->{password};
+    $tree = HTML::TreeBuilder->new_from_content ($res->content);
+    $form = $tree->look_down ('_tag', 'form', 'id', 'guestlogin');
+    if ($form) {
+	my $tmp = $form->look_down('_tag', 'input', 'name', 'username');
+	$tmp->detach;
+	$tmp->delete;
+	$tmp = $form->look_down('_tag', 'input', 'name', 'password');
+	$tmp->detach;
+	$tmp->delete;
+	@inputs = $form->look_down('_tag', 'input', 'type', 'text');
+	push @inputs, $form->look_down('_tag', 'input', 'type', 'checkbox');
+	$submit = $form->look_down('_tag', 'input', 'type', 'submit');
+
+	for my $i (@inputs) {
+	    $content = join '&', $content, $i->attr('name').'='.$i->attr('value');
+	}
+	$content = join '&', $content, 'submit=';
+    }
+    $tree->delete;
+    
+    $req = HTTP::Request->new('POST' => $login);
+    for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
+	$req->header($hn => $p->{'clheaders'}->{$hn});
+    }
+    $req->header('Content-Type' => 'application/x-www-form-urlencoded');
+    $req->content($content);
+    $res = $myua->request($req);
+
+    if ($res->code >= 400) {
+	return -1;
+    }
+    if ($res->code >= 200 and $res->code < 300) {
+	if ($res->content =~ /notloggedin/) {
+	    return -1;
+	}
+    }
+
+    $p->{'clheaders'}->{'Cookie'} = $res->headers->{'set-cookie'} if ($res->headers->{'set-cookie'});
+    return 1;
 }
 
