@@ -1,3 +1,9 @@
+#!/usr/bin/perl
+#
+# Mario Arturo Perez Rangel
+# Jose Luis Torres Rodriguez
+# Version: 
+#
 use strict;
 use warnings;
 use LWP::UserAgent;
@@ -26,21 +32,19 @@ my $uaSSL = LWP::UserAgent->new(
 
 # Datos de prueba
 $ua->agent('Mozilla/5.0');
-my $url = 'http://192.168.13.149/';
-#my $url = 'https://aula.cert.unam.mx/';
-my $req = HTTP::Request->new(GET => $url);
-#my $reqSSL = HTTP::Request->new(GET => $url);
+#my $url = 'http://192.168.13.149/';
+my $url = 'https://aula.cert.unam.mx/';
+#my $req = HTTP::Request->new(GET => $url);
+my $reqSSL = HTTP::Request->new(GET => $url);
 #my $req = HTTP::Request->new(GET => 'http://bpya.fciencias.unam.mx/moodle/');
-#my $res = $uaSSL->request($reqSSL);
-my $res = $ua->request($req);
+my $res = $uaSSL->request($reqSSL);
+#my $res = $ua->request($req);
 
 my $archivoSalida="moodleCrawlOUT.html";
 
 my $tipoSalida = "html";
 
 encabezadoHTML($archivoSalida);
-
-#print "Codigo de respuesta de la URL: ".$res->code."\n\n";
 
 ($tipoSalida eq 'html')? agregaArchivo($archivoSalida, "<p>Codigo de respuesta: ".$res->code."</p>\n") : agregaArchivo($archivoSalida, "Codigo de respuesta: ".$res->code."\n\n");
 
@@ -55,12 +59,13 @@ else {
 # Revisamos la respuesta a los errores 403, 404 y 500
 analizaCodigosError($url, $archivoSalida, $tipoSalida);
 
-pieHTML($archivoSalida);
 
 my $dic = "dicMoodle2";
 
 # Hacemos la revisión de los directorios contenidos en el diccionario
-revisaDiccionario($url, $dic, $archivoSalida, $tipoSalida);
+#revisaDiccionario($url, $dic, $archivoSalida, $tipoSalida);
+
+pieHTML($archivoSalida);
 
 exit (0);
 
@@ -81,9 +86,12 @@ sub analizaCodigosError{
 
     # Error 403
     ($tipoSalida eq 'html')? print SALIDA "<p>Analisis de error 403:</p>\n<table border=1>\n" : print SALIDA "Analisis de error 403:\n";
-    $ua = LWP::UserAgent->new();
+    
+    # Si el protocolo es https deshabilitamos la verificacion de certificados
+    $ua = ($url =~ /https:\/\/.*/) ? LWP::UserAgent->new( ssl_opts => { SSL_verify_mode => 'SSL_VERIFY_NONE' } ) : LWP::UserAgent->new();
+
     $ua->agent('Mozilla/5.0');
-    $urlErr = $url.'archivoParaError403.php';
+    $urlErr = $url.'user/filesedit.php';
     $req = HTTP::Request->new(GET => $urlErr);
     $res403 = $ua->request($req);
     ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>URL utilizada</td><td class='celdaTexto'>".$urlErr."</td></tr>\n" : print SALIDA "\tURL utilizada: ".$urlErr."\n";
@@ -100,9 +108,12 @@ sub analizaCodigosError{
 
     # Error 404
     ($tipoSalida eq 'html')? print SALIDA "<p>Analisis de error 404:</p>\n<table border=1>\n" : print SALIDA "Analisis de error 404:\n";
-    $ua = LWP::UserAgent->new();
+
+    # Si el protocolo es https deshabilitamos la verificacion de certificados
+    $ua = ($url =~ /https:\/\/.*/) ? LWP::UserAgent->new( ssl_opts => { SSL_verify_mode => 'SSL_VERIFY_NONE' } ) : LWP::UserAgent->new();
+
     $ua->agent('Mozilla/5.0');
-    $urlErr = $url.'archivoParaError404.php';
+    $urlErr = $url.'course/index.php?categoryid=-9';
     $req = HTTP::Request->new(GET => $urlErr);
     $res404 = $ua->request($req);
     ($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>URL utilizada</td><td class='celdaTexto'>".$urlErr."</td></tr>\n" : print SALIDA "\tURL utilizada: ".$urlErr."\n";
@@ -139,7 +150,6 @@ sub analizaCodigosError{
 }
 
 
-
 #
 # Hace una revision de los directorios del archivo que contiene el diccionario en el servidor analizado, 
 # en caso de que el usuario lo indique.
@@ -149,7 +159,9 @@ sub revisaDiccionario{
     my ($url, $dicFile, $fileOut, $tipoSalida) = @_; 
     my ($ua, $res, $req, $urlDir, $finURL);
 
-    $ua = LWP::UserAgent->new();
+    # Si el protocolo es https deshabilitamos la verificacion de certificados
+    $ua = ($url =~ /https:\/\/.*/) ? LWP::UserAgent->new( ssl_opts => { SSL_verify_mode => 'SSL_VERIFY_NONE' } ) : LWP::UserAgent->new();
+
     $ua->agent('Mozilla/5.0');
 
     # Intentamos abrir el diccionario
@@ -219,6 +231,15 @@ sub analizaEncabezado{
 
     ($tipoSalida eq 'html')? print SALIDA "<p><h2>Analisis de encabezados</h2></p>\n" : print SALIDA "Analisis de encabezados:\n\n";
 
+    # Mostramos los datos del servidor
+    if ($res->header('Client-Peer'))
+    {
+	($tipoSalida eq 'html')? print SALIDA "<p>Datos del servidor: </p>\n<table border=1>\n" : print SALIDA "Datos del servidor:\n";
+	my @urlPart = split(/:/,$res->header('Client-Peer'));
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Direccion</td><td class='celdaTexto'>".$urlPart[0]."</td></tr>" : print SALIDA "\tDireccion: ".$urlPart[0]."\n";
+	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Puerto</td><td class='celdaTexto'>".$urlPart[1]."</td></tr></table>\n" : print SALIDA "\tPuerto: ".$urlPart[1]."\n";
+    }
+
     # Revisamos la cabecera Server
     ($tipoSalida eq 'html')? print SALIDA "<p>Cabecera Server: </p>\n<table border=1>\n" : print SALIDA "Cabecera Server:\n";
     if ($res->header('Server'))
@@ -231,7 +252,7 @@ sub analizaEncabezado{
 	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Recomendacion</td><td class='celdaTexto'>Incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.</td></tr></table>\n": print SALIDA "\tRecomendacion: incluir 'ServerTokens Prod' y 'ServerSignature' en la configuracion de Apache para reducir la informacion divulgada.\n\n";
     }
     else {
-	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>ServerTokens configurados.</td></tr></table>\n" : print SALIDA "ServerTokens configurados.\n\n";
+	($tipoSalida eq 'html')? print SALIDA "<td class='celdaNom'>ServerTokens configurados.</td></tr></table>\n" : print SALIDA "ServerTokens configurados.\n\n";
     }
 
     # Revisamos X-Powered-By
@@ -273,15 +294,6 @@ sub analizaEncabezado{
 	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Recomendacion</td><td class='celdaTexto'>Habilitar 'X-Frame-Options: SAMEORIGIN' para reducir el riesgo de ataques de tipo clickjacking</td></tr></table>\n" : print SALIDA "\tRecomendacion: habilitar 'X-Frame-Options: SAMEORIGIN' para reducir el riesgo de ataques de tipo clickjacking.\n\n";	
     }
 
-    # Mostramos los datos del servidor
-    if ($res->header('Client-Peer'))
-    {
-	($tipoSalida eq 'html')? print SALIDA "<p>Datos del servidor: </p>\n<table border=1>\n" : print SALIDA "Datos del servidor:\n";
-	my @urlPart = split(/:/,$res->header('Client-Peer'));
-	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Direccion</td><td class='celdaTexto'>".$urlPart[0]."</td></tr>" : print SALIDA "\tDireccion: ".$urlPart[0]."\n";
-	($tipoSalida eq 'html')? print SALIDA "<tr><td class='celdaNom'>Puerto</td><td class='celdaTexto'>".$urlPart[1]."</td></tr></table>\n" : print SALIDA "\tPuerto: ".$urlPart[1]."\n";
-    }
-
     # Revisamos Accept-Ranges para verificar si el servidor acepta peticiones parciales
     ($tipoSalida eq 'html')? print SALIDA "<p>Cabecera Accept-Ranges: </p>\n<table border=1>\n" : print SALIDA "Cabecera Accept-Ranges:\n";
     if ($res->header('Accept-Ranges') ne 'none')
@@ -311,7 +323,7 @@ sub encabezadoHTML{
     print SALIDA "<html xmlns='http://www.w3.org/1999/xhtml'>\n";
     print SALIDA "<head>\n";
     print SALIDA "<meta content='text/html; charset=UTF-8' http-equiv='content-type'/>\n";
-    print SALIDA "<title>Coordinación de Cómputo</title>\n";
+    print SALIDA "<title>Moodle Crawler y divulgacion de informacion</title>\n";
     print SALIDA "<style>\n";
     print SALIDA ".celdaNom{ width: 150px;}\n";
     print SALIDA ".celdaTexto{ width: 900px;}\n";
@@ -377,3 +389,14 @@ sub muestraAyuda {
     print "Las opciones --ip y -s son excluyentes con la URL. En caso de incluirse una de las opciones y la URL, esta ultima se ignorara y se hara uso de la expresion incluida en las opciones mencionadas.\n";
     print "Todos los parametros son opcionales.\n";
 }
+
+
+
+#http://search.cpan.org/~ether/HTTP-Message-6.11/lib/HTTP/Response.pm
+#http://search.cpan.org/~oalders/libwww-perl-6.23/lib/LWP/UserAgent.pm
+#http://stackoverflow.com/questions/4022463/how-can-i-extract-non-standard-http-headers-using-perls-lwp
+#http://search.cpan.org/~ether/HTTP-Message-6.11/lib/HTTP/Headers.pm
+#http://search.cpan.org/~ether/HTTP-Message-6.11/lib/HTTP/Message.pm
+###
+#http://lwp.interglacial.com/ch03_05.htm
+
