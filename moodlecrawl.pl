@@ -109,7 +109,7 @@ while (@url_to_visit) {
 
 ($tipoSalida eq 'html')? agregaArchivo($archivoSalida, "<p><h2>Busqueda de directorios</h2></p>\n") : agregaArchivo($archivoSalida, "Busqueda de directorios\n\n");
 
-agregaArchivo($archivoSalida, join("\n", keys %dir_found));
+agregaArchivo($archivoSalida, join("<br />\n", keys %dir_found));
 
 pieHTML($archivoSalida);
 
