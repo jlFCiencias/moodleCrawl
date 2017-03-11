@@ -199,12 +199,22 @@ sub adjustParams {
 
     $ua->agent('Mozilla/5.0');
 
-    $req = HTTP::Request->new(HEAD => $params{url});
+    $req = HTTP::Request->new(GET => $params{url});
     $res = $ua->request($req);
 
     # Vemos la respuesta del servidor
     if ($res->code == 200) { # Todo bien
 	$p->{loop} = 0;
+	if ($res->content =~ m|http-equiv=\"refresh\"\s*content=\"\d+;URL='(https?)(://)([\w\d._-]+)(:\d+)?(/.*)'\"|) {
+	    $p->{scheme} = $1;
+	    $p->{host} = $3;
+	    if ($4) {
+		$p->{port} = $4;
+		$p->{port} =~ s/^://;
+	    }
+	    $p->{uri} = $5;
+	    $p->{url} = join '', $p->{scheme}, '://', $p->{host}, ($p->{port})? ':'.$p->{port} : '', $p->{uri};
+	}
 	return 1;
     } elsif ($res->code == 301 or $res->code == 302)  { # Redirecciona a otro recurso
 	my $location = $res->headers->{'location'};
@@ -216,6 +226,7 @@ sub adjustParams {
 		$p->{port} =~ s/^://;
 	    }
 	    $p->{uri} = $5;
+	    $p->{url} = join '', $p->{scheme}, '://', $p->{host}, ($p->{port})? ':'.$p->{port} : '', $p->{uri};
 	} elsif ($location =~ m|^/.*|) {   # Es la ruta de un nuevo recurso ?
 	    $p->{uri} = $location;
 	    $p->{url} = join '', $p->{scheme}, '://', $p->{host},
@@ -342,7 +353,7 @@ sub getGuestConnected {
     #
     # Prepara una nueva peticion para obtener una llave de sesion
     #
-	$req->clear();
+    $req->clear();
     $req->method('POST');
     $req->uri($p->{url}.'/user/policy.php');
     for $hn (keys %{$p->{'clheaders'}}) {    # Agregamos las cabeceras necesarias a la peticion
