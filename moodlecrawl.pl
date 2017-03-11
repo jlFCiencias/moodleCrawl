@@ -100,13 +100,11 @@ else {
 
 push @url_to_visit, $params{url};
 
-#print $params{'clheaders'}->{'Cookie'}, "\n";
 while (@url_to_visit) {
     $url = shift @url_to_visit;
     push @visited_url, $url;
     print "Visiting ", $url, "...\n" if ($options{debug});
     visitUrl ($ua, $url, \%params, \%sslopts,  \%dir_found, \@url_to_visit, \@visited_url);
-#    print @url_to_visit, "\n";
 }
 
 ($tipoSalida eq 'html')? agregaArchivo($archivoSalida, "<p><h2>Busqueda de directorios</h2></p>\n") : agregaArchivo($archivoSalida, "Busqueda de directorios\n\n");
@@ -141,7 +139,6 @@ sub visitUrl {
     push @links, $tree->look_down ('_tag', 'link', 'href', qr/.+/);
     for $k (@links) { # Busca y revisa todas las ligas dentro del sitio
 	my $href = $k->attr('href');
-	#print $href, "\n";
 	if ($href =~ m|^$p->{url}([\w\d\._/-]+)/(\w+)\.php.*$|) {
 	    if (!$dirs->{$1}) {
 		$dirs->{$1} = 1;
@@ -181,7 +178,6 @@ sub checkURLIn {
     for $e (@$aref) {
 	$e =~ s|^(.*)/([\w\d._-]+)\.php.*$|$1/$2.php|;
 	$mye =~ s|^(.*)/([\w\d._-]+)\.php.*$|$1/$2.php|;
-	#print '<<1>> ', $e, "\n", '<<2>> ', $mye, "\n\n";
 	return 1 if ($mye eq $e);
     }
     return 0;
@@ -353,7 +349,6 @@ sub getGuestConnected {
 	$req->header($hn => $p->{'clheaders'}->{$hn});
     }
     $res = $myua->request($req);
-    print $res->content;
 
     return 1;
 }
@@ -845,15 +840,16 @@ sub processOptions {
 sub muestraAyuda {
     print "$0 implementa un 'web crawling' para sitios basados en Moodle, lleva a cabo un analisis del sitio indicado revisando la informacion divulgada.\n\n";
     print "Forma de uso:\n";
-    print "  $0 [--help|-h] [[--ip|-s] <direccion ip>] [[--dic|-d] <diccionario>] \n";
-    print ' 'x (length($0)+3), "[[--login|-l] <usuario>] [[--pass|-p] <password>] [[--report|-r] [text|html]] URL\n\n";
+    print "  $0 [--help|-h] [[--ip|-s] <direccion ip>] [[--dict|-d] <diccionario>] \n";
+    print ' 'x (length($0)+3), "[[--login|-l] <usuario>] [[--password|-p] <password>] [[--report|-r] [text|html]] --url URL\n\n";
     print "Donde:\n";
     print "--help o -h\t Muestra esta ayuda\n";
     print "--ip o -s\t Indica la direccion IP del equipo a analizar\n";
-    print "--dic o -d\t Indica el nombre del archivo que contiene el diccionario de directorios a revisar en el equipo a analizar\n";
+    print "--dict o -d\t Indica el nombre del archivo que contiene el diccionario de directorios a revisar en el equipo a analizar\n";
     print "--login o -l\t Indica el nombre de usuario a usar para conectarse al equipo analizado\n";
-    print "--pass o -p\t Indica el password a utilizar para conectarse al equipo analizado\n";
+    print "--password o -p\t Indica el password a utilizar para conectarse al equipo analizado\n";
     print "--report o -r\t Indica como se debe generar el reporte. Las opciones son 'text' y 'html', siendo la primera la opcion predeterminada.\n\n";
+    print "--url\t\t La URL del directorio base de moodle.\n\n";
     print "Las opciones --ip y -s son excluyentes con la URL. En caso de incluirse una de las opciones y la URL, esta ultima se ignorara y se hara uso de la expresion incluida en las opciones mencionadas.\n";
     print "Todos los parametros son opcionales.\n";
 }
