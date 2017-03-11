@@ -77,7 +77,7 @@ if ($params{dict})
 {
    $dicFile = $params{dict}; 
    # Hacemos la revisión de los directorios contenidos en el diccionario
-   revisaDiccionario($url, $dicFile, $archivoSalida, $tipoSalida);
+   revisaDiccionario($params{url}, $dicFile, $archivoSalida, $tipoSalida);
 }
 
 $ua = LWP::UserAgent->new ( ssl_opts => \%sslopts );
@@ -100,7 +100,7 @@ else {
 
 push @url_to_visit, $params{url};
 
-print $params{'clheaders'}->{'Cookie'}, "\n";
+#print $params{'clheaders'}->{'Cookie'}, "\n";
 while (@url_to_visit) {
     $url = shift @url_to_visit;
     push @visited_url, $url;
@@ -279,8 +279,8 @@ sub getGuestConnected {
 	    $content = join '&', $content, $i->attr('name').'='.$i->attr('value');
 	}
 	$content = join '&', $content, 'submit=';
+	$form->delete;
     }
-    $form->delete;
     $tree->delete;
     
     #
@@ -547,7 +547,7 @@ sub revisaDiccionario{
 	($tipoSalida eq 'html')? print SALIDA "<tr><td>".$urlDir."</td>\n" : print SALIDA "$urlDir\n";
 	($tipoSalida eq 'html')? print SALIDA "<td></td>\n" : print SALIDA "\tDiagnostico: ";
 	if ($res->code == 200){
-	    ($tipoSalida eq 'html')? print SALIDA "<td>indexes habilitada</td></tr>\n" : print SALIDA "Indexes habilitada.\n\n";
+	    ($tipoSalida eq 'html')? print SALIDA "<td>El directorio existe</td></tr>\n" : print SALIDA "El directorio existe.\n\n";
 	}
 	else{
 	    if ($res->code == 403){
@@ -555,7 +555,7 @@ sub revisaDiccionario{
 	    }
 	    else{
 		if ($res->code == 404){
-		    ($tipoSalida eq 'html')? print SALIDA "<td>Indexes deshabilitada.</td></tr>\n" : print SALIDA "Indexes deshabilitada.\n\n";
+		    ($tipoSalida eq 'html')? print SALIDA "<td>No existe o no se puede acceder</td></tr>\n" : print SALIDA "No existe o no se puede acceder.\n\n";
 		}
 		else{
 		    if ($res->code >= 300 && $res->code < 400){
